@@ -55,7 +55,7 @@ public:
 			LOG(ERROR) << ss.str() << ". Errno " << myErrno;
 			throwOnFileError(ss.str(), myErrno);
 		}
-		// run background thread of file read to buffer
+		// run a background thread of the file write by data from the queue
 		m_backgroundWrite = make_unique<thread>(std::bind(&WriteStream::backgroundWrittingToFile, this));
 	}
 
@@ -146,7 +146,7 @@ protected:
 				auto ptr = std::move(m_queue.pop());
 				if (!ptr) 
 				{
-					LOG(INFO) << "Come null from queue." << " Errno=" << m_errno <<
+					LOG(INFO) << "It's come a null from queue." << " Errno=" << m_errno <<
 						", isEOF="<< m_isEOF << ". Continue";
 					continue;
 				}
@@ -159,7 +159,7 @@ protected:
 					{
 						continue;
 					}
-					//TODO: Return buffer back on errno EINTR
+					//TODO: Returns buffer back on errno EINTR
 					//Stop work
 					m_queue.pushError(m_errno, "Error on file write.");
 					break;
@@ -200,7 +200,7 @@ protected:
 
 	unique_ptr<std::thread> m_backgroundWrite;
 
-	const size_t m_ioBlockSize; // Optimal size of block to flash on disk
+	const size_t m_ioBlockSize; // Optimal size of the block to flash on disk
 
 	//Event of end background write
 	mutex m_jobEndCVMutex;

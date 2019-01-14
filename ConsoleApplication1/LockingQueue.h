@@ -47,16 +47,15 @@ private:
 	const size_t m_maxBufferSize;//in bytes.
 	std::atomic<size_t> m_QueueBytesSize;//in bytes. Atomic because in some cases uses without mutex. It's a bit faster
 
-	//Events of read from buffer
-	//mutex m_ReadEventsCVMutex;
-	condition_variable m_ReadEventsCV;
 
 	// buffer with prepared chunks for user
 	ListOfBlocks m_buffers;
 	mutex m_bufferMutex;
 
+	//Events of read from buffer
+	condition_variable m_ReadEventsCV;
+
 	//Events of background write to buffer from file
-	//mutex m_WriteEventsCVMutex;
 	condition_variable m_WriteEventsCV;
 
 };

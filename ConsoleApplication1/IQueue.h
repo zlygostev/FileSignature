@@ -19,12 +19,6 @@ struct IStreamQueue
 	virtual bool isInputStopped() = 0;
 
 	virtual BlockPTR pop() = 0;
-
-	// returns size in bytes of all blocks of data
-	//virtual size_t dataSize() = 0;
-	// returns items count in buffer
-	//virtual size_t itemsCount() = 0;
-
 };
 
 }
