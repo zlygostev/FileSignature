@@ -4,6 +4,8 @@
 #include "WriteSteamBuffer.h"
 #include "MD5SignatureCalculationStrategy.h"
 #include "TransformationEngine.h"
+#include "LockingQueue.h"
+#include "MemBlocksPool.h"
 #include <iostream>
 //#include <direct.h>
 //#include "logger.h"
@@ -36,23 +38,30 @@ int main(int argc, const char* argv[])
 		settings.check(); //throw on inacceptable settings
 
 		
-		//It was an idea to read the file by a few big blocks parallel and save their signatures. 
+		// It was an idea to read the file by a few big blocks parallel and save their signatures. 
 		// But the idea has a few bad cases:
-		// - (for example) sample block size could has a lower value then size of md5.
-		// - high disk loaCd on run
-		// So as more clear and easiest solution has been made next solution:
-	
-		// One thread is sequentually reading input file to a buffer in one thread
-		ReadStream inputStream(settings.source, settings.maxBufferSize, settings.ioPortionSize);
-		// Another thread realizes output stream. It writes data from buffer to result file backgroundly 
-		WriteStream outputStream(settings.result, settings.maxBufferSize, settings.ioPortionSize);
-		// There is a main thread that get chunks of the input file from buffer, 
-		// calculate their hashes and write them to the output steam.
-		MD5SignatureCalculationStrategy transformationStrategy(outputStream, settings.sampleSize);
-		TransformationEngine engine(inputStream, outputStream, transformationStrategy);
+		// - seek penaltes
+		// - sample block size could has a lower value then size of md5.
+		// - high disk load on run
+		// So as more clear and easiest solution has been made a next solution:
+		// Threads conveyer
+		// Queues for conveyor organization
+		// Pool takes a good affect on big files and large ioPortionSize
+		MemBlocksPool memPool(settings.maxBufferSize/settings.ioPortionSize + 1);
+		LockingQueue inputQueue(settings.maxBufferSize, "InQueue");
+		LockingQueue outputQueue(settings.maxBufferSize, "OutQueue");
+		// One thread is sequentually reading input file to the inputQueue in an individual thread
+		ReadStream inputStream(settings.source, inputQueue, memPool, settings.ioPortionSize);
+		// Another thread realizes output stream. It writes data from outputQueue to result file backgroundly 
+		WriteStream outputStream(settings.result, outputQueue, settings.ioPortionSize);
+		// There is a main thread that get chunks of the input file from inputQueue, 
+		// calculate their hashes and write them to the output queue.
+		MD5SignatureCalculationStrategy transformationStrategy(outputQueue, memPool, settings.sampleSize);
+		TransformationEngine engine(inputQueue, outputQueue, transformationStrategy);
 		LOG(INFO) << "Start transformation";
 		engine.transform();
 		LOG(INFO) << "Finish transformation";
+		outputStream.waitClose();
 		LOG(INFO) << "Main destructors run";
 
 	}

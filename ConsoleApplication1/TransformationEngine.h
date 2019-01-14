@@ -10,7 +10,7 @@ namespace transformation_stream
 
 struct TransformationEngine
 {
-	TransformationEngine(IReadStream& in, IWriteStream& out, ITransformationStrategy& strategy) :
+	TransformationEngine(IStreamQueue& in, IStreamQueue& out, ITransformationStrategy& strategy) :
 		m_in(in),
 		m_out(out),
 		m_transformationStrategy(strategy)
@@ -23,10 +23,10 @@ struct TransformationEngine
 		size_t totalSize = 0, readSize = 0;
 		try
 		{
-			while (!m_in.isEOF())
+			while (!m_in.isInputStopped())
 			{
 				//TIMED_SCOPE(TEtimerBlkObj2, "TransformLoop");
-				auto bufferPtr = m_in.get();
+				auto bufferPtr = m_in.pop();
 				if (bufferPtr)
 				{
 					readSize = bufferPtr->size();
@@ -39,20 +39,20 @@ struct TransformationEngine
 				}
 			}
 			m_transformationStrategy.dump();
-			m_out.close();
+			m_out.stopInputStream();
 			LOG(INFO) << "The file is read till the end. Size " << totalSize;
 		}
 		catch (const std::exception& ex)
 		{
 			LOG(ERROR) << "Stop transformation by exception on byte " << totalSize << ". Error: " << ex.what();
-			m_in.stop();
-			m_out.cancel();
+			m_in.stopInputStream();
+			m_out.pushError(EINTR, ex.what());
 			throw ex;
 		}
 	}
 
-	IReadStream& m_in;
-	IWriteStream& m_out;
+	IStreamQueue& m_in;
+	IStreamQueue& m_out;
 	ITransformationStrategy& m_transformationStrategy;
 
 };

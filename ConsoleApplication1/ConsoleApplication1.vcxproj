@@ -167,9 +167,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="MemBlocksPool.h" />
     <ClInclude Include="CommonStreamBuffer.h" />
     <ClInclude Include="easylogging++.h" />
+    <ClInclude Include="IQueue.h" />
     <ClInclude Include="IReadStream.h" />
+    <ClInclude Include="LockingQueue.h" />
     <ClInclude Include="ReadStreamBuffer.h" />
     <ClInclude Include="IWriteStream.h" />
     <ClInclude Include="ITransformationStrategy.h" />
@@ -185,6 +188,7 @@
     <ClCompile Include="CommonStreamBuffer.cpp" />
     <ClCompile Include="easylogging++.cc" />
     <ClCompile Include="FileSignature.cpp" />
+    <ClCompile Include="LockingQueue.cpp" />
     <ClCompile Include="MD5SignatureCalculationStrategy.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

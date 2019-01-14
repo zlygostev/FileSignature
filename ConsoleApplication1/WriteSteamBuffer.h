@@ -11,6 +11,7 @@
 #include <iostream>
 #include "easylogging++.h"
 #include "IWriteStream.h"
+#include "IQueue.h"
 #include "CommonStreamBuffer.h"
 
 using namespace std;
@@ -26,26 +27,21 @@ class WriteStream : public IWriteStream
 public:
 	// Input params:
 	// file - a name of a file to write
-	// maxBufferSize - maximal size in bytes of an internal file cache for background dumping to file
-	WriteStream(const std::string& file, size_t maxBufferSize, size_t ioBlockSize) :
-		m_maxBufferSize(maxBufferSize),
-		m_bufferSize(0),
-		m_totalWritten(0),
-		m_notFlushed(0),
+	// queue - a source of input stream
+	// ioBlockSize - size in bytes of block for disk io communication
+	WriteStream(const std::string& file, IStreamQueue& queue, size_t ioBlockSize) :
 		m_ioBlockSize(ioBlockSize),
 		m_fileName(file),
-		m_file(nullptr),
+		m_file(nullptr), 
+		m_queue(queue),
+		m_isStopped(false),
 		m_isEOF(false),
 		m_needStop(false),
 		m_errno(0)
 	{
-		if (m_maxBufferSize == 1)
-		{
-			throw std::invalid_argument("max Buffer size should have positive value.");
-		}
 		// open file
 #ifdef _WIN32
-		auto myErrno = fopen_s(&m_file, file.c_str(), "wb");
+		const auto myErrno = fopen_s(&m_file, file.c_str(), "wb");
 		if (myErrno)
 		{
 #else
@@ -63,243 +59,157 @@ public:
 		m_backgroundWrite = make_unique<thread>(std::bind(&WriteStream::backgroundWrittingToFile, this));
 	}
 
-
 	virtual ~WriteStream()
 	{
 		if (!m_isEOF)
 		{
+			LOG(INFO) << "Start destucting with EOF "
+				<< m_isEOF << ", Errno " << m_errno << ". Canceling write job";
+
 			cancel();
 		}
-		LOG(INFO) << "Total bytes write " << m_totalWritten;
-		m_writeEventsCV.notify_one();
-		m_readEventsCV.notify_one();
+		LOG(INFO) <<  "Destuct: Is end of file " 
+				<< m_isEOF << ", Errno " << m_errno ;
+
+		m_queue.stopInputStream();
 		m_backgroundWrite->join();
 		LOG(INFO) << "Background stream of file write to disk is closed";
 		fclose(m_file);
 		LOG(INFO) << "The result file is closed";
 		if (!m_isEOF || m_errno)
 		{
-			LOG(WARNING) << "The result file is removed";
+			LOG(WARNING) << "The result file is removed. EOF " << m_isEOF << ". Errno " << m_errno;
 			remove(m_fileName.c_str());
 		}
-
 	}
 
-	void close() override
+	void waitClose() override
 	{
 		if (m_errno)
 		{
-			throwOnFileError("Can't close file. Background write has an error: ", m_errno);
+			throwOnFileError("Can't close file. It was errno: ", m_errno);
 		}
-
-		m_isEOF = true;
-		m_writeEventsCV.notify_one();
-		//TODO
+		if (m_needStop)
+		{
+			throwOnFileError("Can't close file. Thread is canceled with errno: ", m_errno);
+		}
+		unique_lock<decltype(m_jobEndCVMutex)> lock(m_jobEndCVMutex);
+		if (!m_jobEndCV.wait_for(lock, chrono::seconds(15), std::bind(&WriteStream::isStopped, this)))
+		{
+			LOG(WARNING) << "";
+		}
 	}
 
 	void cancel() override
 	{
 		m_needStop = true;
 		m_errno = EINTR;
-		m_writeEventsCV.notify_one();
-		m_readEventsCV.notify_one();
-	}
-
-	bool isFreeSpaceEnoghtForWrite(size_t chunkSize)
-	{
-		//Potentially it could be negative right part so type should be signed
-		return static_cast<int64_t>(chunkSize) <= static_cast<int64_t>(m_maxBufferSize - m_bufferSize);
-	}
-
-	void putAsync(BufferPTR chunk) override
-	{
-		//TIMED_FUNC(OSPutTimerObj);
-		if (!chunk)
-		{
-			LOG(WARNING) << "empty chunk is come for write";
-			return;
-		}
-
-		if (m_errno)
-		{
-			LOG(ERROR) << "Can't write to file. Errno " << m_errno;
-			throwOnFileError("Can't write to file: ", m_errno);
-		}
-
-		if (m_isEOF)
-		{
-			std::string msg = "file is already closed";
-			LOG(ERROR) << msg;
-			throw invalid_argument(msg);
-		}
-
-		if (m_needStop)
-		{
-			std::string msg = "file is already canceled";
-			LOG(ERROR) << msg;
-			throw invalid_argument(msg);
-		}
-
-
-		const auto chunkSize = chunk->size();
-		if (chunkSize > m_maxBufferSize)
-		{
-			stringstream msg_stream;
-			msg_stream << "Stream error: Attempt to write asynchroniusly chunk of data larger then maximum buffer size (" << m_maxBufferSize << ")";
-			LOG(ERROR) << msg_stream.str();
-			throw invalid_argument(msg_stream.str());
-		}
-
-		//static_cast for cases if value of difference negat
-		if (!isFreeSpaceEnoghtForWrite(chunkSize))
-		{
-			LOG(DEBUG) << "wait: buffer is full. Size: " << m_bufferSize;
-			waitIfBufferFull(chunkSize);
-			LOG(DEBUG) << "stop waiting buffer. Size: " << m_bufferSize;
-		}
-		m_bufferSize += chunkSize;
-		m_totalWritten += chunkSize;
-		unique_lock<decltype(m_bufferMutex)> lock(m_bufferMutex);
-		m_buffers.push_back(std::move(chunk));
-		lock.unlock();
-		LOG(DEBUG) << "New data is written on buffer. Size: " << m_bufferSize << ". Total written " << m_totalWritten;
-		m_writeEventsCV.notify_one();
-
+		m_queue.pushError(EINTR, "Write to file is canceled by user thread");
 	}
 
 protected:
-	bool isNeedUserThreadWakeup(size_t chunkSize)
+	bool isStopped() 
 	{
-		return (chunkSize <= m_maxBufferSize - m_bufferSize) || m_isEOF || m_needStop;
-	}
-
-	void waitIfBufferFull(size_t chunkSize)
-	{
-		while ( !isFreeSpaceEnoghtForWrite(chunkSize) && !m_isEOF && !m_needStop)
-		{
-			LOG(DEBUG) << "Start waiting buffer for free space to write to. Buffers size " << m_bufferSize << ", need " << chunkSize;
-			unique_lock<decltype(m_readEventsCVMutex)> lock(m_readEventsCVMutex);
-			if (!m_readEventsCV.wait_for(lock, chrono::seconds(15), std::bind(&WriteStream::isNeedUserThreadWakeup, this, chunkSize)))
-			{
-				LOG(WARNING) << "Timeout on free space in buffer waiting. Buffers size " << m_bufferSize << ", need " << chunkSize;
-			}
-		}
+		return m_isStopped;
 	}
 
 	bool isNeedToStopWrite()
 	{
-		return  (m_isEOF && m_bufferSize == 0) 
-				|| m_needStop || m_errno;
+		return  m_queue.isInputStopped() || m_needStop || m_errno;
 	}
 
-	bool needBackgroundThreadWakeup()
-	{
-		return  static_cast<int64_t>(m_bufferSize) > 0 || m_isEOF || m_needStop;
-	}
-
-	// wait user's inputs to buffer
-	void waitNewData()
-	{
-		//TIMED_FUNC(OSTimerWaitWriteEvents);
-		unique_lock<decltype(m_writeEventsCVMutex)> lock(m_writeEventsCVMutex);
-		if (!m_writeEventsCV.wait_for(lock, chrono::milliseconds(15000), std::bind(&WriteStream::needBackgroundThreadWakeup, this)))
-		{
-			LOG(WARNING) << "Timeout on background write  waiting. Buffers " << m_bufferSize ;
-		}
-	}
-	void flush() 
+	void flush(size_t& bytesToFlush)
 	{
 		if (fflush(m_file) != 0)
 		{
 			m_errno = errno;
 			if (m_errno)
 			{
-				LOG(ERROR) << "File flush error " << m_errno << " on or before bytes " << m_totalWritten;
+				LOG(ERROR) << "File flush error " << m_errno ;
 				m_isEOF = true;
 			}
 		}
-		m_notFlushed = 0;
-
+		bytesToFlush = 0;
 	}
 
 	//Write a content from buffer to the file
 	void backgroundWrittingToFile()
 	{
+		unique_lock<decltype(m_jobEndCVMutex)> lock(m_jobEndCVMutex);//It will unlocked on the end of job
+		size_t totalWritten = 0;//bytes
+		// It indicates how much bytes were written to the file without flush operation
+		size_t bytesToFlush = 0; 
 		try 
 		{
-			//TIMED_FUNC(OSTimerObj1);
 			while (!isNeedToStopWrite())
 			{
-				//TIMED_SCOPE(timerBlkObj1, "bg-Wr2File");
-				unique_lock<decltype(m_bufferMutex)> lock(m_bufferMutex);
-				if (m_buffers.empty())
+				auto ptr = std::move(m_queue.pop());
+				if (!ptr) 
 				{
-					lock.unlock();
-					if(m_notFlushed)
-					{
-						flush();
-					}
-					LOG(DEBUG) << "Buffer is empty. Stop write to file. Waiting new data";
-					waitNewData();
-					LOG(DEBUG) << "Stop waiting new data in buffer. Buffer size " << m_bufferSize;
+					LOG(INFO) << "Come null from queue." << " Errno=" << m_errno <<
+						", isEOF="<< m_isEOF << ". Continue";
 					continue;
 				}
-
-				BufferPTR ptr = std::move(m_buffers.front());
 				const size_t bufferSize = ptr->size();
-				m_notFlushed += bufferSize;
-				m_bufferSize -= bufferSize;
-				bool needFlush = (m_notFlushed >= m_ioBlockSize) ? true : false;
-				m_buffers.pop_front();
-				lock.unlock();
-				m_readEventsCV.notify_one();
-				size_t writeCount = fwrite(&(*ptr)[0], 1/*sizeof(char_type)*/, bufferSize, m_file);
+				const size_t writeCount = fwrite(&(*ptr)[0], 1/*sizeof(char_type)*/, bufferSize, m_file);
 				if (writeCount != bufferSize)
 				{
 					m_errno = errno;
+					if (m_errno == 0)
+					{
+						continue;
+					}
 					//TODO: Return buffer back on errno EINTR
 					//Stop work
-					m_isEOF = true;
+					m_queue.pushError(m_errno, "Error on file write.");
 					break;
 				}
+
+				totalWritten += bufferSize;
+				bytesToFlush += bufferSize;
+				bool needFlush = (bytesToFlush >= m_ioBlockSize) ? true : false;
 				if (needFlush)
 				{
-					flush();
+					flush(bytesToFlush);
 				}
 			}
-
+			// Flush the rest of data to disk after end of the file 
+			if (m_isEOF && !m_errno)
+			{
+				flush(bytesToFlush);
+			}
 		}
 		catch (const std::exception& ex)
 		{
-			LOG(ERROR) << "Exception on background write to file: " << ex.what();
+			stringstream ss;
+			ss << "Exception on background write to file: " << ex.what();
+			LOG(ERROR) << ss.str();
 			m_errno = EINTR;
-			m_isEOF = true;
+			m_queue.pushError(EINTR, ss.str());
 		}
+		if (!m_errno)
+		{
+			flush(bytesToFlush);
+		}
+		m_isEOF = true;
+		m_isStopped = true;
+		LOG(INFO) << "Total bytes written: " << totalWritten << ". Is EOF=" << m_isEOF 
+			<< " . Errno="<<m_errno;
 	}
 
-	const size_t m_maxBufferSize;//in bytes
-	std::atomic<size_t> m_bufferSize;//in bytes. Atomic because in some cases uses without mutex. It's a bit faster
-	std::atomic<size_t> m_totalWritten; //in bytes. just for logging
 
-	//Events of user's write to buffer
-	mutex m_writeEventsCVMutex;
-	condition_variable m_writeEventsCV;
-
-	//A buffer with a prepared chunks of data for sequentual write to file
-	ListOfBuffers m_buffers;
-	mutex m_bufferMutex;
 	unique_ptr<std::thread> m_backgroundWrite;
-	size_t m_notFlushed; // in bytes. It indicates how much bytes were written to file without flush operation  
+
 	const size_t m_ioBlockSize; // Optimal size of block to flash on disk
 
-
-	//Events of background consumption data from buffer
-	mutex m_readEventsCVMutex;
-	condition_variable m_readEventsCV;
+	//Event of end background write
+	mutex m_jobEndCVMutex;
+	condition_variable m_jobEndCV;
+	atomic<bool> m_isStopped;
 
 	const std::string m_fileName;
 	FILE *m_file;
-
+	IStreamQueue &m_queue;
 	// State of backgroundly processing file stream
 	atomic<bool> m_isEOF;
 	atomic<bool> m_needStop;

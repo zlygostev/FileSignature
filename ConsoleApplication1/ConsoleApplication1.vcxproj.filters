@@ -54,6 +54,15 @@
     <ClInclude Include="ReadStreamBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="LockingQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MemBlocksPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -69,6 +78,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="easylogging++.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LockingQueue.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

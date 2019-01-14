@@ -45,6 +45,13 @@ namespace options
 			if (ioPortionSize <= 0) {
 				throw std::invalid_argument("io-buffer size should have a positive value.");
 			}
+			if (maxBufferSize < 2 * ioPortionSize)
+			{
+				std::string err = "Maximal buffer size should be larger at list twice of IO block operation. "
+					"It is a performance optimization of the parallel work";
+				throw std::invalid_argument(err);
+			}
+
 		}
 	};
 

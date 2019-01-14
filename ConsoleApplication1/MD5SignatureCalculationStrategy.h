@@ -4,6 +4,8 @@
 
 #include "IWriteStream.h"
 #include "IReadStream.h"
+#include "IQueue.h"
+#include "MemBlocksPool.h"
 #include "ITransformationStrategy.h"
 
 namespace transformation_stream
@@ -11,14 +13,15 @@ namespace transformation_stream
 //Class implements logic of MD5 signature file build
 struct MD5SignatureCalculationStrategy: ITransformationStrategy
 {
-	MD5SignatureCalculationStrategy(IWriteStream& out, size_t portion_size);
+	MD5SignatureCalculationStrategy(IStreamQueue& out, MemBlocksPool& memPool, size_t portion_size);
 
-	void transform(BufferPTR data) override;
+	void transform(BlockPTR data) override;
 
 	void dump() override;
 
 private:
-	IWriteStream& m_out;
+	IStreamQueue& m_out;
+	MemBlocksPool& m_memPool;
 	const size_t m_portionSize;
 	size_t m_transformedCount;
 	std::unique_ptr<boost::uuids::detail::md5> m_md5;

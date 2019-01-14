@@ -10,10 +10,10 @@ namespace transformation_stream
 		virtual ~IWriteStream() = default;
 
 		// Put data to the output file asynchronously
-		virtual void putAsync(BufferPTR chunk) = 0;
+		//virtual void putAsync(BlockPTR chunk) = 0;
 
-		// Indicate the end of the file data 
-		virtual void close() = 0;
+		// Wait while stream is finish writex 
+		virtual void waitClose() = 0;
 
 		// Cancel output stream. Remove output file 
 		virtual void cancel() = 0;

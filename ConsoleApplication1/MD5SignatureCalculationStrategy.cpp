@@ -1,12 +1,14 @@
 #include "MD5SignatureCalculationStrategy.h"
+#include "MemBlocksPool.h"
 #include <boost/algorithm/hex.hpp>
 #include "easylogging++.h"
 
 namespace transformation_stream
 {
 
-MD5SignatureCalculationStrategy::MD5SignatureCalculationStrategy(IWriteStream& out, size_t portion_size) :
+MD5SignatureCalculationStrategy::MD5SignatureCalculationStrategy(IStreamQueue& out, MemBlocksPool& memPool, size_t portion_size) :
 	m_out(out),
+	m_memPool(memPool),
 	m_portionSize(portion_size),
 	m_transformedCount(0),
 	m_blockWritten(0)
@@ -14,7 +16,7 @@ MD5SignatureCalculationStrategy::MD5SignatureCalculationStrategy(IWriteStream& o
 	m_md5 = make_unique<boost::uuids::detail::md5>();
 }
 
-void MD5SignatureCalculationStrategy::transform(BufferPTR data)
+void MD5SignatureCalculationStrategy::transform(BlockPTR data)
 {
 	
 	if (!data)
@@ -55,6 +57,7 @@ void MD5SignatureCalculationStrategy::transform(BufferPTR data)
 		m_transformedCount = 0;//reset calculation state
 		LOG(DEBUG) << "Hash calculation is finished";
 	}
+	m_memPool.push(std::move(data));
 }
 
 void MD5SignatureCalculationStrategy::dump()
@@ -70,11 +73,11 @@ void MD5SignatureCalculationStrategy::dump()
 	m_md5->get_digest(digest);
 	uint8_t* tmpBufferPtr = reinterpret_cast<uint8_t*>(&(digest[0]));
 	const size_t MD5BytesSize = 16; //sizeof(digest)
-	BufferPTR buffer = make_unique<BufferT>(tmpBufferPtr, tmpBufferPtr + MD5BytesSize);
+	BlockPTR buffer = make_unique<BlockT>(tmpBufferPtr, tmpBufferPtr + MD5BytesSize);
 	//std::string md5Text;
 	//boost::algorithm::hex(buffer->begin(), buffer->end(), back_inserter(md5Text));
 	//LOG(TRACE) << "New md5: " << md5Text;
-	m_out.putAsync(std::move(buffer));
+	m_out.push(std::move(buffer));
 	m_blockWritten++;
 }
 
