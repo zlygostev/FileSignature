@@ -71,7 +71,7 @@ public:
 		LOG(INFO) <<  "Destuct: Is end of file " 
 				<< m_isEOF << ", Errno " << m_errno ;
 
-		m_queue.stopInputStream();
+		m_queue.stopIncomes();
 		m_backgroundWrite->join();
 		LOG(INFO) << "Background stream of file write to disk is closed";
 		fclose(m_file);

@@ -39,13 +39,13 @@ struct TransformationEngine
 				}
 			}
 			m_transformationStrategy.dump();
-			m_out.stopInputStream();
+			m_out.stopIncomes();
 			LOG(INFO) << "The file is read till the end. Size " << totalSize;
 		}
 		catch (const std::exception& ex)
 		{
 			LOG(ERROR) << "Stop transformation by exception on byte " << totalSize << ". Error: " << ex.what();
-			m_in.stopInputStream();
+			m_in.stopIncomes();
 			m_out.pushError(EINTR, ex.what());
 			throw ex;
 		}

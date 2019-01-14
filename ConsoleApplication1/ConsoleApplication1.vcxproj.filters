@@ -63,6 +63,9 @@
     <ClInclude Include="MemBlocksPool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="IMemBlocksPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

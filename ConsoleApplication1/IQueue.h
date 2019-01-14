@@ -13,8 +13,8 @@ struct IStreamQueue
 	// This method should be a last one of push methods. It assumes stop of stream after
 	virtual void pushError(int inErrno, const std::string& msg) = 0;
 
-	// Set it to prohibit any push operation to queue and indicate the end of input stream
-	virtual void stopInputStream() = 0;
+	// Set it to prohibit any push operations to queue and indicates an end of the input stream
+	virtual void stopIncomes() = 0;
 
 	virtual bool isInputStopped() = 0;
 

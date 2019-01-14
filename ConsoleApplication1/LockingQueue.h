@@ -26,7 +26,7 @@ public:
 
 	void pushError(int inErrno, const std::string& msgDetails) override;
 
-	void stopInputStream() override;
+	void stopIncomes() override;
 
 	bool isInputStopped() override;
 

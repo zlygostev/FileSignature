@@ -4,16 +4,17 @@
 #include<memory>
 #include "easylogging++.h"
 #include "CommonStreamBuffer.h"
+#include "IMemBlocksPool.h"
+
 namespace transformation_stream
 {
-//TODO: make IMemBlocksPool. Use it in Reader and Calc Strategy
-struct MemBlocksPool
+struct MemBlocksPool: IMemBlocksPool
 {
 	MemBlocksPool(size_t maxItemsCount):m_maxItemsCount(maxItemsCount)
 	{
 	}
 
-	BlockPTR get(size_t size)
+	BlockPTR get(size_t size) override
 	{
 		unique_lock<decltype(m_mutex)> lock(m_mutex);
 		if (!m_blocks.empty())
@@ -35,7 +36,7 @@ struct MemBlocksPool
 
 
 	}
-	void push(BlockPTR block)
+	void push(BlockPTR block) override
 	{
 		if (!block)
 			return;

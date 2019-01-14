@@ -46,7 +46,7 @@ int main(int argc, const char* argv[])
 		// So as more clear and easiest solution has been made a next solution:
 		// Threads conveyer
 		// Queues for conveyor organization
-		// Pool takes a good affect on big files and large ioPortionSize
+		// Pool makes a good efforts in big files and large ioPortionSize. About 10%
 		MemBlocksPool memPool(settings.maxBufferSize/settings.ioPortionSize + 1);
 		LockingQueue inputQueue(settings.maxBufferSize, "InQueue");
 		LockingQueue outputQueue(settings.maxBufferSize, "OutQueue");
@@ -55,7 +55,7 @@ int main(int argc, const char* argv[])
 		// Another thread realizes output stream. It writes data from outputQueue to result file backgroundly 
 		WriteStream outputStream(settings.result, outputQueue, settings.ioPortionSize);
 		// There is a main thread that get chunks of the input file from inputQueue, 
-		// calculate their hashes and write them to the output queue.
+		// calculates their hashes and write them to the output queue.
 		MD5SignatureCalculationStrategy transformationStrategy(outputQueue, memPool, settings.sampleSize);
 		TransformationEngine engine(inputQueue, outputQueue, transformationStrategy);
 		LOG(INFO) << "Start transformation";

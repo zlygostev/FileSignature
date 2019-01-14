@@ -25,7 +25,7 @@ namespace transformation_stream
 
 // An asynchronous binary input stream.
 // It is implemented for a sequential streaming of a file's data by blocks with minimal copying operations.
-// As a performance optimization, there is an background thread. It sequentially reads file's content to an internal buffer. 
+// As a performance optimization, there is an background thread. It sequentially reads file's content to an queue. 
 class ReadStream: public IReadStream
 {
 public:
@@ -33,7 +33,7 @@ public:
 	// file - name of file to read from
 	// maxBufferSize - Maximal size in bytes of an internal file cache
 	// blockSize - DataBlock size in bytes. It's a block size for communication with user and with disk
-	ReadStream(const std::string& file, IStreamQueue& queue, MemBlocksPool& memPool, size_t blockSize) :
+	ReadStream(const std::string& file, IStreamQueue& queue, IMemBlocksPool& memPool, size_t blockSize) :
 		m_IOBlockSize(blockSize),
 		m_queue(queue),
 		m_memPool(memPool),
@@ -88,7 +88,7 @@ private:
 	void finishRead()
 	{
 		m_isEOF = true;
-		m_queue.stopInputStream();
+		m_queue.stopIncomes();
 	}
 
 	///Write to  buffer a content from the file
@@ -172,7 +172,7 @@ private:
 	unique_ptr<std::thread> m_backgroundRead;
 
 	IStreamQueue& m_queue;
-	MemBlocksPool& m_memPool;
+	IMemBlocksPool& m_memPool;
 	FILE *m_file;
 	// State of backgroundly processing file stream
 	atomic<bool> m_isEOF;

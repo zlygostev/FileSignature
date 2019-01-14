@@ -19,7 +19,7 @@ LockingQueue::LockingQueue(size_t maxBufferSize, const std::string& queueName) :
 
 LockingQueue::~LockingQueue()
 {
-	stopInputStream();
+	stopIncomes();
 
 }
 void LockingQueue::push(BlockPTR bufferPtr, bool isEndOfStream)
@@ -102,10 +102,10 @@ void LockingQueue::pushError(int inErrno, const std::string& msgDetails)
 
 	m_errno = inErrno;
 	m_errnoMsg = msgDetails;
-	stopInputStream();
+	stopIncomes();
 }
 
-void LockingQueue::stopInputStream()
+void LockingQueue::stopIncomes()
 {
 	LOG(WARNING) << m_queueName << ": Request of stop input stream is come. Is EOF " << m_isEOF;
 	if (!m_isEOF)
