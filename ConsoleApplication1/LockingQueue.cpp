@@ -176,5 +176,4 @@ bool LockingQueue::needWriteThreadWakeup(size_t dataSize)
 {
 	return m_isEOF || isFreeSpaceEnoughForWrite(dataSize);
 }
-
 };

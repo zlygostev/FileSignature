@@ -94,10 +94,17 @@ public:
 			throwOnFileError("Can't close file. Thread is canceled with errno: ", m_errno);
 		}
 		unique_lock<decltype(m_jobEndCVMutex)> lock(m_jobEndCVMutex);
-		if (!m_jobEndCV.wait_for(lock, chrono::seconds(15), std::bind(&WriteStream::isStopped, this)))
+		if (!m_jobEndCV.wait_for(lock, chrono::seconds(3600), std::bind(&WriteStream::isStopped, this)))
 		{
-			LOG(WARNING) << "";
+			LOG(WARNING) << "Time out on wait close";
+			throw std::runtime_error("The file is written a too long time");
 		}
+		//check if it appear after write till the end
+		if (m_errno)
+		{
+			throwOnFileError("Can't close file. It was errno: ", m_errno);
+		}
+
 	}
 
 	void cancel() override
