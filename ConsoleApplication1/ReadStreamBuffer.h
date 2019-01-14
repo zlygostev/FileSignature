@@ -106,7 +106,7 @@ private:
 				}
 
 				bool isEndOfFile = false;
-				auto bufferPtr = std::move(m_memPool.get(m_IOBlockSize));
+				BlockPTR bufferPtr = m_memPool.get(m_IOBlockSize);
 				LOG(DEBUG) << "Start Reading new block from file";
 
 #ifdef _WIN32

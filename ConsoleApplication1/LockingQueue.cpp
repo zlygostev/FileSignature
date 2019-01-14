@@ -136,8 +136,7 @@ BlockPTR LockingQueue::pop()
 			lock.unlock();
 			LOG(DEBUG) << m_queueName << ": Extracted chunk " << bufSize << " B by user. Buffer size " << m_QueueBytesSize;
 			m_ReadEventsCV.notify_one();
-			//TODO: is it really need std::move here?
-			return std::move(ptr);
+			return ptr;
 		}
 		if (m_isEOF)
 		{
@@ -147,8 +146,7 @@ BlockPTR LockingQueue::pop()
 				LOG(INFO) << m_queueName << ": " << err << "throw errno exception from queue. Errno: " << m_errno;
 				throwOnFileError(err, m_errno);
 			}
-			//TODO: is it really need std::move here?
-			return std::move(BlockPTR(nullptr));
+			return BlockPTR(nullptr);
 		}
 		//wait New Data
 		LOG(DEBUG) << m_queueName << ": Wait a new data in queue inside pop(). EOF=" << m_isEOF;
@@ -160,8 +158,7 @@ BlockPTR LockingQueue::pop()
 		lock.unlock();
 		LOG(DEBUG) << m_queueName << ": Stop waiting of new data in queue";
 	} while (!(m_isEOF && m_QueueBytesSize == 0));
-	//TODO: is it really need std::move here?
-	return std::move(BlockPTR(nullptr));
+	return BlockPTR(nullptr);
 }
 
 
